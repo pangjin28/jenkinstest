@@ -48,11 +48,39 @@ pipeline {
 
 stage('Start web server') {
   steps {
-    // index.html 있는 현재 폴더를 8081로 서빙 (10초만 유지)
-    bat '''
-      start "" /B cmd /c "python -m http.server 8081"
-      timeout /t 10 >nul
-      for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8081 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>&1
+    powershell '''
+      $port = 8081
+      $listener = New-Object System.Net.HttpListener
+      $listener.Prefixes.Add("http://localhost:$port/")
+      $listener.Start()
+      Write-Host "Serving http://localhost:$port/index.html (10 seconds)..."
+
+      $end = (Get-Date).AddSeconds(10)
+
+      while ((Get-Date) -lt $end) {
+        $result = $listener.BeginGetContext($null, $null)
+
+        if ($result.AsyncWaitHandle.WaitOne(200)) {
+          $ctx = $listener.EndGetContext($result)
+
+          $path = Join-Path (Get-Location) "index.html"
+          if (!(Test-Path $path)) {
+            $ctx.Response.StatusCode = 404
+            $ctx.Response.Close()
+            continue
+          }
+
+          $bytes = [System.IO.File]::ReadAllBytes($path)
+          $ctx.Response.ContentType = "text/html; charset=utf-8"
+          $ctx.Response.ContentLength64 = $bytes.Length
+          $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+          $ctx.Response.OutputStream.Close()
+        }
+      }
+
+      $listener.Stop()
+      $listener.Close()
+      Write-Host "Server stopped."
     '''
   }
 }
