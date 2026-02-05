@@ -9,11 +9,13 @@ pipeline {
     }
 
     stage('Show files') {
-      steps {
-        bat 'chcp 65001 >nul && dir'
-      }
-    }
-
+  steps {
+    powershell '''
+      [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+      Get-ChildItem | Format-Table -AutoSize
+    '''
+  }
+}
     stage('Show content') {
       steps {
         bat '''
